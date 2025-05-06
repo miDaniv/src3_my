@@ -16,7 +16,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-
 def _create_data(locale: str) -> Faker:
     """
     Creates a Faker instance for generating localized fake data.
@@ -78,13 +77,13 @@ def _write_to_csv() -> None:
     ]
 
     # Establish number of rows based date.
-    if str(date.today()) == "2024-09-23":
+    if str(date.today()) == "2025-05-05":
         rows = random.randint(100_372, 100_372)
     else:
         rows = random.randint(0, 1_101)
     
     # Open the CSV file for writing.
-    with open("/opt/airflow/data/raw_data.csv", mode="a", encoding="utf-8", newline="") as file:
+    with open("/opt/airflow/data/raw_data.csv", mode="w", encoding="utf-8", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(headers)
         
@@ -96,41 +95,30 @@ def _write_to_csv() -> None:
 
 
 def _add_id() -> None:
-    """
-    Adds a unique UUID to each row in a CSV file.
-    """
-    # Load the CSV into a Polars DataFrame.
-    df = duckdb.read_csv("/opt/airflow/data/raw_data.csv")
-    # Generate a list of UUIDs (one for each row).
-    uuid_list = [str(uuid.uuid4()) for _ in range(df.height)]
-    # Add a new column with unique IDs.
-    df["unique_id"] = uuid_list
-    # Save the updated DataFrame back to a CSV.
-    df.write_csv("/opt/airflow/data/raw_data.csv")
-    # Log the action.
-    logging.info("Added UUID to the dataset.")
+    df = duckdb.query("SELECT * FROM read_csv_auto('/opt/airflow/data/raw_data.csv')").to_df()
+    
+    if "unique_id" not in df.columns:
+        df["unique_id"] = [str(uuid.uuid4()) for _ in range(df.shape[0])]
+        duckdb.register("df", df)
+        duckdb.query("COPY df TO '/opt/airflow/data/raw_data.csv' (HEADER, DELIMITER ',');")
+        logging.info("Added UUID to the dataset.")
+    else:
+        logging.info("UUID already exists — skipping.")
 
 
 def _update_datetime() -> None:
-    """
-    Update the 'accessed_at' column in a CSV file with the appropriate timestamp.
-    """
-        # Change date only for next runs.
-    if str(date.today()) != "2024-09-23":
-        # Get the current time without milliseconds and calculate yesterday's time.
+    if str(date.today()) != "2025-05-05":
         current_time = datetime.now().replace(microsecond=0)
         yesterday_time = str(current_time - timedelta(days=1))
-        # Load the CSV into a Polars DataFrame.
-        df = duckdb.read_csv("/opt/airflow/data/raw_data.csv")
-        # Replace all values in the 'accessed_at' column with yesterday's timestamp.
-        df = duckdb.query(f"""
-    SELECT *, '{yesterday_time}' AS accessed_at
-    FROM read_csv_auto('/opt/airflow/data/raw_data.csv')
-""").to_df()
-        # Save the updated DataFrame back to a CSV file.
-        df.write_csv("/opt/airflow/data/raw_data.csv")
-        # Log the action.
+        
+        df = duckdb.query("SELECT * FROM read_csv_auto('/opt/airflow/data/raw_data.csv')").to_df()
+        df["accessed_at"] = yesterday_time 
+
+
+        duckdb.register("df", df)
+        duckdb.query("COPY df TO '/opt/airflow/data/raw_data.csv' (HEADER, DELIMITER ',');")
         logging.info("Updated accessed timestamp.")
+
 
 
 def save_raw_data():
