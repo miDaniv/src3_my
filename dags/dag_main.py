@@ -1,6 +1,5 @@
 from airflow import DAG
 from datetime import datetime
-
 from dag_tasks import get_tasks
 
 # Define the default arguments for DAG.
@@ -23,11 +22,12 @@ dag = DAG(
     extract_raw_data_task,
     create_raw_schema_task,
     create_raw_table_task,
+    check_updated_accessed_at_column,
     load_raw_data_task,
     run_dbt_staging_task,
     run_dbt_trusted_task
 ) = get_tasks(dag)
-# Set the task in the DAG
+
 [extract_raw_data_task, create_raw_schema_task] >> create_raw_table_task
-create_raw_table_task >> load_raw_data_task >> run_dbt_staging_task
+create_raw_table_task >> check_updated_accessed_at_column >> load_raw_data_task >> run_dbt_staging_task
 run_dbt_staging_task >> run_dbt_trusted_task
